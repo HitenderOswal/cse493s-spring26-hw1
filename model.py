@@ -185,7 +185,6 @@ class GPT(nn.Module):
 
         logits = self.lm_head(x)
 
-
         return logits
 
     def crop_block_size(self, block_size):
@@ -223,3 +222,4 @@ class GPT(nn.Module):
         extra_args = dict(fused=True) if use_fused else dict()
         optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
         print(f"using fused AdamW: {use_fused}")
+        return optimizer
