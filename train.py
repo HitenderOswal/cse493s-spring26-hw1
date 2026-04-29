@@ -22,8 +22,8 @@ with open(args.train_config, 'r', encoding='utf-8') as file:
 with open(args.model_config, 'r', encoding='utf-8') as file:
     model_config = json.load(file)
 
-if not torch.cuda.is_available():
-    raise RuntimeError('No GPU available.')
+# if not torch.cuda.is_available():
+#     raise RuntimeError('No GPU available.')
 
 train_config['dtype'] = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
 
@@ -35,18 +35,33 @@ torch.manual_seed(1)
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 
-device_type = 'cuda'
-train_device = 'cuda:0'
+device_type = 'cuda' if torch.cuda.is_available() else 'cpu'
+train_device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-train_data = np.fromfile(os.path.join(train_config['dataset'], 'train.bin'), dtype=np.uint16)
-val_data = np.fromfile(os.path.join(train_config['dataset'], 'val.bin'), dtype=np.uint16)
+train_data = np.load(os.path.join(train_config['dataset'], 'train.npy'))
+val_data = np.load(os.path.join(train_config['dataset'], 'val.npy'))
+test_data = np.load(os.path.join(train_config['dataset'], 'test.npy'))
+
+# def get_batch(split):
+#     data = train_data if split == 'train' else val_data
+#     ix = torch.randint(len(data) - model_config['block_size'], (train_config['batch_size'],)).tolist()
+#     x = torch.stack([torch.from_numpy((data[i:i+model_config['block_size']]).astype(np.int64)) for i in ix])
+#     y = torch.stack([torch.from_numpy((data[i+1:i+1+model_config['block_size']]).astype(np.int64)) for i in ix])
+#     x, y = x.pin_memory().to(train_device, non_blocking=True), y.pin_memory().to(train_device, non_blocking=True)
+#     return x, y
 
 def get_batch(split):
     data = train_data if split == 'train' else val_data
-    ix = torch.randint(len(data) - model_config['block_size'], (train_config['batch_size'],)).tolist()
-    x = torch.stack([torch.from_numpy((data[i:i+model_config['block_size']]).astype(np.int64)) for i in ix])
-    y = torch.stack([torch.from_numpy((data[i+1:i+1+model_config['block_size']]).astype(np.int64)) for i in ix])
-    x, y = x.pin_memory().to(train_device, non_blocking=True), y.pin_memory().to(train_device, non_blocking=True)
+
+    ix = torch.randint(len(data), (train_config['batch_size'],))
+    batch = torch.from_numpy(data[ix]).long()
+
+    x = batch[:, :-1]
+    y = batch[:, -1]
+
+    x = x.to(train_device)
+    y = y.to(train_device)
+
     return x, y
 
 iter_num = 0
@@ -64,7 +79,7 @@ if args.resume and os.path.exists(os.path.join(train_config['experiment_dir'], '
 
 model.to(train_device)
 
-scaler = torch.cuda.amp.GradScaler(enabled=(train_config['dtype'] == torch.float16))
+scaler = torch.amp.GradScaler(enabled=(train_config['dtype'] == torch.float16))
 
 optimizer = model.configure_optimizers(train_config['weight_decay'], train_config['learning_rate'], (train_config['beta1'], train_config['beta2']), device_type)
 
@@ -80,14 +95,28 @@ def estimate_loss():
     out = {}
     model.eval()
     for split in ['train', 'val']:
-        losses = torch.zeros(train_config['eval_iters'])
+        losses = torch.zeros(train_config['eval_iters'], device=train_device)
+        accs = torch.zeros(train_config['eval_iters'], device=train_device)
+
         for k in range(train_config['eval_iters']):
             X, Y = get_batch(split)
             with torch.amp.autocast(device_type=device_type, dtype=train_config['dtype']):
+            #     logits = model(X)
+            #     loss = F.cross_entropy(logits.view(-1, logits.size(-1)), Y.view(-1))
+
                 logits = model(X)
-                loss = F.cross_entropy(logits.view(-1, logits.size(-1)), Y.view(-1))
+                logits = logits[:, -1, :]
+                loss = F.cross_entropy(logits, Y)
+
+            preds = torch.argmax(logits, dim=-1)
+            acc = (preds == Y).float().mean()
+
             losses[k] = loss.item()
+            accs[k] = acc.item()
+
         out[split] = losses.mean()
+        out[split + '_acc'] = accs.mean().item()
+
     model.train()
     return out
 
@@ -110,10 +139,12 @@ while True:
 
     if iter_num % train_config['eval_interval'] == 0:
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, train acc {losses['train_acc']:.4f}, val acc {losses['val_acc']:.4f}")
         writer.add_scalar('loss/train_eval', losses['train'].item(), iter_num)
         writer.add_scalar('loss/val', losses['val'].item(), iter_num)
         writer.add_scalar('lr', lr, iter_num)
+        writer.add_scalar('acc/train_eval', losses['train_acc'], iter_num)
+        writer.add_scalar('acc/val', losses['val_acc'], iter_num)
         if losses['val'] < best_val_loss:
             best_val_loss = losses['val']
         checkpoint = {
@@ -130,7 +161,9 @@ while True:
     for _ in range(train_config['gradient_accumulation_steps']):
         with torch.amp.autocast(device_type=device_type, dtype=train_config['dtype']):
             logits = model(X)
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), Y.view(-1))
+            logits = logits[:, -1, :]
+            # loss = F.cross_entropy(logits.view(-1, logits.size(-1)), Y.view(-1))
+            loss = F.cross_entropy(logits, Y)
             loss = loss / train_config['gradient_accumulation_steps']
         X, Y = get_batch('train')
         scaler.scale(loss).backward()

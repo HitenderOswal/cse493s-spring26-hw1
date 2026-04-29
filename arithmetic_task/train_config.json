@@ -1,0 +1,26 @@
+{
+  "dataset": "arithmetic_task/data",
+  "experiment_dir": "arithmetic_task/runs",
+
+  "batch_size": 512,
+  "gradient_accumulation_steps": 1,
+
+  "learning_rate": 1e-3,
+  "min_lr": 1e-3,
+  "warmup_iters": 10,
+  "decay_lr": false,
+
+  "max_iters": 100000,
+
+  "weight_decay": 1,
+  "beta1": 0.9,
+  "beta2": 0.98,
+
+  "grad_clip": 1.0,
+
+  "eval_interval": 50,
+  "eval_iters": 10,
+  "log_interval": 10,
+
+  "compile": true
+}
