@@ -31,7 +31,7 @@ os.makedirs(train_config['experiment_dir'], exist_ok=True)
 tb_log_dir = os.path.join(train_config['experiment_dir'], 'tensorboard')
 writer = SummaryWriter(log_dir=tb_log_dir)
 
-torch.manual_seed(1)
+torch.manual_seed(train_config['seed'])
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 

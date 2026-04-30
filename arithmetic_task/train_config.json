@@ -1,9 +1,10 @@
 {
-  "dataset": "arithmetic_task/data",
+  "dataset": "arithmetic_task/data/p97_add",
   "experiment_dir": "arithmetic_task/runs",
 
   "batch_size": 512,
   "gradient_accumulation_steps": 1,
+  "seed": 0,
 
   "learning_rate": 1e-3,
   "min_lr": 1e-3,
