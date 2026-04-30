@@ -94,7 +94,7 @@ if train_config['compile']:
 def estimate_loss():
     out = {}
     model.eval()
-    for split in ['train', 'val']:
+    for split in ['train', 'val', 'test']:
         losses = torch.zeros(train_config['eval_iters'], device=train_device)
         accs = torch.zeros(train_config['eval_iters'], device=train_device)
 
@@ -139,12 +139,18 @@ while True:
 
     if iter_num % train_config['eval_interval'] == 0:
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, train acc {losses['train_acc']:.4f}, val acc {losses['val_acc']:.4f}")
+        print(
+            f"step {iter_num}: "
+            f"train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, test loss {losses['test']:.4f}, "
+            f"train acc {losses['train_acc']:.4f}, val acc {losses['val_acc']:.4f}, test acc {losses['test_acc']:.4f}"
+        )
         writer.add_scalar('loss/train_eval', losses['train'].item(), iter_num)
         writer.add_scalar('loss/val', losses['val'].item(), iter_num)
+        writer.add_scalar('loss/test', losses['test'].item(), iter_num)
         writer.add_scalar('lr', lr, iter_num)
         writer.add_scalar('acc/train_eval', losses['train_acc'], iter_num)
         writer.add_scalar('acc/val', losses['val_acc'], iter_num)
+        writer.add_scalar('acc/test', losses['test_acc'], iter_num)
         if losses['val'] < best_val_loss:
             best_val_loss = losses['val']
         checkpoint = {
