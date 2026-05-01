@@ -9,6 +9,11 @@ You may import from other files in your repo. You may add helper functions.
 Just make sure the three functions below work as specified.
 """
 
+import torch
+from model import GPT, GPTConfig
+from pathlib import Path
+
+
 def load_model_and_tokenizer(checkpoint_dir: str):
     """
     Load a trained model and its tokenizer from a checkpoint directory.
@@ -23,7 +28,39 @@ def load_model_and_tokenizer(checkpoint_dir: str):
         whatever object your predict_answer / generate_sanity_check functions
         expect — we do not constrain its type.
     """
-    raise NotImplementedError
+
+
+    """
+    Tokenizer for arithmetic tasks.
+
+    Args:
+        c: The character to tokenize.
+        p: The modulus (97 or 113).
+
+    Returns:
+        The tokenized character.
+    """
+    def arithmetic_tokenizer(c, p):
+        if c == '+':
+            return p
+        elif c == '-':
+            return p + 1
+        elif c == '/':
+            return p + 2
+        elif c == '=':
+            return p + 3
+        return c
+
+    ckpt_path = Path(checkpoint_dir) / "ckpt.pt"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    checkpoint = torch.load(ckpt_path, map_location=device)
+
+    model = GPT(GPTConfig(**checkpoint["model_config"]))
+    model.load_state_dict(checkpoint["model"])
+
+    model.to(device).eval()
+
+    return model, arithmetic_tokenizer
 
 
 def get_bos_token(tokenizer=None):
@@ -50,4 +87,12 @@ def predict_answer(model, tokenizer, a: int, b: int, op: str, p: int) -> int:
         You are responsible for formatting the input according to your
         training scheme and parsing the model's output back to an integer.
     """
-    raise NotImplementedError
+
+    device = next(model.parameters()).device
+    inp = torch.tensor([[tokenizer(a, p), tokenizer(op, p), tokenizer(b, p), tokenizer('=', p)]], dtype=torch.long, device=device)
+    
+    with torch.no_grad():
+        logits = model(inp)[:, -1, :]
+        pred = torch.argmax(logits, dim=-1).item()
+
+    return int(pred)
