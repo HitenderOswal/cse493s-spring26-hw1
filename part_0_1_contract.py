@@ -62,11 +62,11 @@ def load_model_and_tokenizer(checkpoint_dir: str):
     model.to(device).eval()
     
     if checkpoint["model_config"]["vocab_size"] == 50304:
-       tokenizer = tiktoken.encoding_for_model("gpt2")
+        tokenizer = tiktoken.encoding_for_model("gpt2")
     else:
         tokenizer = arithmetic_tokenizer
 
-    return model, arithmetic_tokenizer
+    return model, tokenizer
 
 
 def get_bos_token(tokenizer=None):
