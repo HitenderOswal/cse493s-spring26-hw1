@@ -1,6 +1,6 @@
 {
   "block_size": 4,
-  "vocab_size": 117,
+  "vocab_size": 101,
   "n_layer": 2,
   "n_head": 4,
   "n_embd": 128,

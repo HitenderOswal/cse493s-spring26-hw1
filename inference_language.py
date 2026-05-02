@@ -11,7 +11,7 @@ def load_tokenizer():
     return tiktoken.encoding_for_model("gpt2")
 
 @torch.no_grad()
-def generate(model: GPT, idx: torch.Tensor, max_new_tokens: int, temperature: float = 1.0):
+def generate(model: GPT, idx: torch.Tensor, max_new_tokens: int, eot, temperature: float = 1.0):
     for _ in range(max_new_tokens):
         idx_cond = idx if idx.size(1) <= model.config.block_size else idx[:, -model.config.block_size:]
         logits = model(idx_cond)
@@ -19,6 +19,8 @@ def generate(model: GPT, idx: torch.Tensor, max_new_tokens: int, temperature: fl
         probs = F.softmax(logits, dim=-1)
         idx_next = torch.multinomial(probs, num_samples=1)
         idx = torch.cat((idx, idx_next), dim=1)
+        if (idx_next == eot):
+            break
     return idx
 
 
@@ -31,9 +33,9 @@ def decode_tokens(tokenizer, token_ids, skip_special_tokens: bool = False):
 def main() -> None:
     parser = argparse.ArgumentParser(description="Simple text-generation debug script.")
     parser.add_argument("--model-path", required=True, help="Path to a checkpoint file or checkpoint directory.")
-    parser.add_argument("--prompt", default="I love machine learning", help="Prompt to extend.")
+    parser.add_argument("--prompt", default="<|endoftext|>", help="Prompt to extend.")
     parser.add_argument("--max-new-tokens", type=int, default=40, help="How many tokens to generate.")
-    parser.add_argument("--temperature", type=float, default=1.0, help="Sampling temperature. Use 0 for greedy decoding.")
+    parser.add_argument("--temperature", type=float, default=0.5, help="Sampling temperature.")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -52,12 +54,12 @@ def main() -> None:
 
     input_token_ids = tokenizer.encode(args.prompt, allowed_special={'<|endoftext|>'})
     input_ids = torch.tensor([input_token_ids], dtype=torch.long, device=device)
-    print(decode_tokens(tokenizer, input_token_ids))
     output_ids = generate(
         model,
         input_ids,
-        max_new_tokens=args.max_new_tokens,
-        temperature=args.temperature
+        args.max_new_tokens,
+        tokenizer.eot_token,
+        temperature=args.temperature,
     )
 
     generated = output_ids[0, input_ids.shape[1] :]
