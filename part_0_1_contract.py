@@ -13,6 +13,7 @@ import torch
 from model import GPT, GPTConfig
 from pathlib import Path
 
+import tiktoken
 
 def load_model_and_tokenizer(checkpoint_dir: str):
     """
@@ -59,6 +60,11 @@ def load_model_and_tokenizer(checkpoint_dir: str):
     model.load_state_dict(checkpoint["model"])
 
     model.to(device).eval()
+    
+    if checkpoint["model_config"]["vocab_size"] == 50304:
+       tokenizer = tiktoken.encoding_for_model("gpt2")
+    else:
+        tokenizer = arithmetic_tokenizer
 
     return model, arithmetic_tokenizer
 
@@ -67,7 +73,7 @@ def get_bos_token(tokenizer=None):
     """
     Get the BOS token for the tokenizer, for part 0 of the assignment.
     """
-    raise NotImplementedError
+    return tokenizer.eot_token
 
 
 def predict_answer(model, tokenizer, a: int, b: int, op: str, p: int) -> int:
