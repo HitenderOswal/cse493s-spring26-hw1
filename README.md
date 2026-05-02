@@ -7,3 +7,8 @@ The files under `sanity_check/` are for part 0, with the related `inference_lang
 ## Part 2
 
 The notebook `part_2_starter.ipynb` has code to load pretrained models, the AIME dataset, functions for evaluation and has all of our work to conduct the part 2 experiments. The files under `scaling_results/` are our results from the scaling experiments, with `run_inference.py` being our inference script for part 2.
+
+
+## Writeup
+
+The file `CSE493S_Homework_1_Writeup.pdf` contains our report for the homework.
